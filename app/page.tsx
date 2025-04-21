@@ -27,7 +27,7 @@ import {
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-export const Home = () => {
+export default function Home() {
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [videoFile, setVideoFile] = useState<File | null>(null);
@@ -640,6 +640,4 @@ export const Home = () => {
       </div>
     </main>
   );
-};
-
-export default Home;
+}

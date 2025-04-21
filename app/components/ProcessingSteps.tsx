@@ -49,7 +49,7 @@ export const ProcessingSteps = ({ isProcessing }: ProcessingStepsProps) => {
   useEffect(() => {
     if (!isProcessing) {
       // Reset steps when not processing
-      setSteps(steps.map(step => ({
+      setSteps(currentSteps => currentSteps.map(step => ({
         ...step,
         completed: false,
         current: step.id === "upload"
