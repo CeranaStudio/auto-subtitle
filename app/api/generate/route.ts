@@ -40,6 +40,9 @@ export async function POST(request: NextRequest) {
     const subtitleOutline = parseInt(formData.get('subtitleOutline') as string || '3');
     const subtitleSize = parseInt(formData.get('subtitleSize') as string || '24');
     
+    // Check if using existing subtitles
+    const existingSubtitlesUrl = formData.get('existingSubtitlesUrl') as string | null;
+    
     // Validate dimension
     const dimension = ['480p', '720p', '1080p'].includes(dimensionValue) 
       ? dimensionValue as VideoDimension 
@@ -52,6 +55,35 @@ export async function POST(request: NextRequest) {
       let audioPath = '';
       let subtitlesPath = '';
       let imagePath: string | null = null;
+      
+      // If using existing subtitles, download them
+      if (existingSubtitlesUrl) {
+        subtitlesPath = path.join(uploadDir, 'subtitles.vtt');
+        
+        // Handle local file system paths
+        if (existingSubtitlesUrl.startsWith('/uploads/')) {
+          // This is a local file path from our system
+          const sourcePath = path.join(process.cwd(), 'public', existingSubtitlesUrl);
+          try {
+            const subtitlesContent = await fs.promises.readFile(sourcePath, 'utf-8');
+            await fs.promises.writeFile(subtitlesPath, subtitlesContent);
+          } catch (error) {
+            console.error('Error reading subtitles:', error);
+            throw new Error('無法讀取字幕檔案: ' + (error instanceof Error ? error.message : '未知錯誤'));
+          }
+        } else {
+          // For external URLs, fetch via HTTP
+          const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
+          const subtitlesResponse = await fetch(baseUrl + existingSubtitlesUrl);
+          
+          if (!subtitlesResponse.ok) {
+            throw new Error('無法取得字幕檔案');
+          }
+          
+          const subtitlesContent = await subtitlesResponse.text();
+          await fs.promises.writeFile(subtitlesPath, subtitlesContent);
+        }
+      }
       
       if (mode === 'audio') {
         // Audio + Image mode
@@ -88,12 +120,15 @@ export async function POST(request: NextRequest) {
           );
         }
         
-        // Transcribe the audio file
-        const transcription = await transcribeAudio(audioPath);
+        // Only transcribe if not using existing subtitles
+        if (!existingSubtitlesUrl) {
+          // Transcribe the audio file
+          const transcription = await transcribeAudio(audioPath);
 
-        // Save the generated subtitles
-        subtitlesPath = path.join(uploadDir, 'subtitles.vtt');
-        await fs.promises.writeFile(subtitlesPath, transcription);
+          // Save the generated subtitles
+          subtitlesPath = path.join(uploadDir, 'subtitles.vtt');
+          await fs.promises.writeFile(subtitlesPath, transcription);
+        }
       } else {
         // Video mode
         const videoFile = formData.get('video') as File;
@@ -118,34 +153,37 @@ export async function POST(request: NextRequest) {
           `video${videoExt}`
         );
         
-        // Extract audio from video
-        audioPath = path.join(uploadDir, 'extracted_audio.mp3');
-        
-        // Run ffmpeg to extract audio
-        await new Promise<void>((resolve, reject) => {
-          const ffmpeg = spawn('ffmpeg', [
-            '-i', videoPath,
-            '-q:a', '0',
-            '-map', 'a',
-            audioPath
-          ]);
+        // Only extract audio and transcribe if not using existing subtitles
+        if (!existingSubtitlesUrl) {
+          // Extract audio from video
+          audioPath = path.join(uploadDir, 'extracted_audio.mp3');
           
-          ffmpeg.on('close', code => {
-            if (code === 0) resolve();
-            else reject(new Error(`Failed to extract audio from video (code ${code})`));
+          // Run ffmpeg to extract audio
+          await new Promise<void>((resolve, reject) => {
+            const ffmpeg = spawn('ffmpeg', [
+              '-i', videoPath,
+              '-q:a', '0',
+              '-map', 'a',
+              audioPath
+            ]);
+            
+            ffmpeg.on('close', code => {
+              if (code === 0) resolve();
+              else reject(new Error(`Failed to extract audio from video (code ${code})`));
+            });
+            
+            ffmpeg.on('error', err => {
+              reject(new Error(`Failed to extract audio: ${err.message}`));
+            });
           });
           
-          ffmpeg.on('error', err => {
-            reject(new Error(`Failed to extract audio: ${err.message}`));
-          });
-        });
-        
-        // Transcribe the extracted audio
-        const transcription = await transcribeAudio(audioPath);
+          // Transcribe the extracted audio
+          const transcription = await transcribeAudio(audioPath);
 
-        // Save the generated subtitles
-        subtitlesPath = path.join(uploadDir, 'subtitles.vtt');
-        await fs.promises.writeFile(subtitlesPath, transcription);
+          // Save the generated subtitles
+          subtitlesPath = path.join(uploadDir, 'subtitles.vtt');
+          await fs.promises.writeFile(subtitlesPath, transcription);
+        }
         
         // Generate video with subtitles by treating the original video as input
         const outputPath = path.join(outputDir, 'output.mp4');
