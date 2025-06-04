@@ -25,8 +25,10 @@ import {
   AlignJustify,
   X,
   Upload,
-  Download
+  Download,
+  ChevronDown
 } from "lucide-react";
+import { downloadSubtitles as downloadSubtitleWithFormat } from "./lib/subtitle-converter";
 
 export default function Home() {
   const [audioFile, setAudioFile] = useState<File | null>(null);
@@ -46,6 +48,7 @@ export default function Home() {
   const [subtitleSize, setSubtitleSize] = useState<number>(24);
   const [subtitleText, setSubtitleText] = useState<string>("預覽字幕效果");
   const [inputMode, setInputMode] = useState<string>("audio");
+  const [showSubtitleFormats, setShowSubtitleFormats] = useState(false);
 
   const subtitleEditorRef = useRef<SubtitleEditorRef>(null);
 
@@ -57,6 +60,24 @@ export default function Home() {
       if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl);
     };
   }, [audioPreviewUrl, imagePreviewUrl, videoPreviewUrl]);
+
+  // Add effect to handle clicking outside dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (showSubtitleFormats) {
+        const target = event.target as HTMLElement;
+        const dropdown = target.closest('.subtitle-format-dropdown');
+        if (!dropdown) {
+          setShowSubtitleFormats(false);
+        }
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showSubtitleFormats]);
 
   const handleAudioChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] ?? null;
@@ -357,27 +378,13 @@ export default function Home() {
   }, [subtitlePosition, subtitleOutline, subtitleSize, dimension]);
   
   // Download subtitles function
-  const downloadSubtitles = async () => {
+  const downloadSubtitles = async (format: string = 'vtt') => {
     if (!subtitlesUrl) return;
     
     try {
-      const response = await fetch(subtitlesUrl);
-      if (!response.ok) {
-        throw new Error('Failed to fetch subtitles');
-      }
-      
-      const vttContent = await response.text();
-      const blob = new Blob([vttContent], { type: 'text/vtt' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = 'subtitles.vtt';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      
-      toast.success("字幕檔案已下載");
+      await downloadSubtitleWithFormat(subtitlesUrl, format);
+      toast.success(`字幕已下載為 ${format.toUpperCase()} 格式`);
+      setShowSubtitleFormats(false);
     } catch (error) {
       toast.error("下載字幕失敗: " + (error instanceof Error ? error.message : "未知錯誤"));
     }
@@ -770,14 +777,45 @@ export default function Home() {
                         </a>
                       </Button>
                       {subtitlesUrl && (
-                        <Button 
-                          variant="outline" 
-                          onClick={downloadSubtitles}
-                          className="flex items-center gap-2"
-                        >
-                          <Download className="h-4 w-4" />
-                          下載字幕
-                        </Button>
+                        <div className="relative subtitle-format-dropdown">
+                          <Button 
+                            variant="outline" 
+                            onClick={() => setShowSubtitleFormats(!showSubtitleFormats)}
+                            className="flex items-center gap-2"
+                          >
+                            <Download className="h-4 w-4" />
+                            下載字幕
+                            <ChevronDown className="h-4 w-4" />
+                          </Button>
+                          {showSubtitleFormats && (
+                            <div className="absolute top-full mt-1 right-0 bg-background border rounded-md shadow-lg z-10 py-1 min-w-[150px]">
+                              <button
+                                onClick={() => downloadSubtitles('vtt')}
+                                className="w-full px-3 py-2 text-sm hover:bg-accent text-left"
+                              >
+                                WebVTT (.vtt)
+                              </button>
+                              <button
+                                onClick={() => downloadSubtitles('srt')}
+                                className="w-full px-3 py-2 text-sm hover:bg-accent text-left"
+                              >
+                                SubRip (.srt)
+                              </button>
+                              <button
+                                onClick={() => downloadSubtitles('txt')}
+                                className="w-full px-3 py-2 text-sm hover:bg-accent text-left"
+                              >
+                                純文字 (.txt)
+                              </button>
+                              <button
+                                onClick={() => downloadSubtitles('ass')}
+                                className="w-full px-3 py-2 text-sm hover:bg-accent text-left"
+                              >
+                                ASS/SSA (.ass)
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       )}
                     </div>
                   </>

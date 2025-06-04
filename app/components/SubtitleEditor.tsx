@@ -14,9 +14,10 @@ import {
   Type,
   CheckCircle,
   X,
-  Download
+  ChevronDown
 } from "lucide-react";
 import { toast } from "sonner";
+import { downloadSubtitles as downloadSubtitleWithFormat } from "../lib/subtitle-converter";
 
 interface SubtitleEntry {
   id: string;
@@ -45,6 +46,25 @@ export const SubtitleEditor = forwardRef<SubtitleEditorRef, SubtitleEditorProps>
     endTime: "",
     text: ""
   });
+  const [showSubtitleFormats, setShowSubtitleFormats] = useState(false);
+
+  // Add effect to handle clicking outside dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (showSubtitleFormats) {
+        const target = event.target as HTMLElement;
+        const dropdown = target.closest('.subtitle-format-dropdown');
+        if (!dropdown) {
+          setShowSubtitleFormats(false);
+        }
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showSubtitleFormats]);
 
   // Expose methods to parent component
   useImperativeHandle(ref, () => ({
@@ -255,19 +275,22 @@ export const SubtitleEditor = forwardRef<SubtitleEditorRef, SubtitleEditorProps>
     });
   };
 
-  // Download subtitles
-  const downloadSubtitles = () => {
-    const vttContent = generateVTT(subtitles);
-    const blob = new Blob([vttContent], { type: 'text/vtt' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'subtitles.vtt';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    toast.success("字幕檔案已下載");
+  const handleDownload = async (format: string = 'vtt') => {
+    try {
+      // Get current content
+      const vttContent = generateVTT(subtitles);
+      const blob = new Blob([vttContent], { type: 'text/vtt' });
+      const tempUrl = URL.createObjectURL(blob);
+      
+      // Use the converter to download in different formats
+      await downloadSubtitleWithFormat(tempUrl, format);
+      URL.revokeObjectURL(tempUrl);
+      
+      toast.success(`字幕已下載為 ${format.toUpperCase()} 格式`);
+      setShowSubtitleFormats(false);
+    } catch (error) {
+      toast.error("下載失敗: " + (error instanceof Error ? error.message : "未知錯誤"));
+    }
   };
 
   if (loading) {
@@ -312,15 +335,45 @@ export const SubtitleEditor = forwardRef<SubtitleEditorRef, SubtitleEditorProps>
                 <Plus className="h-4 w-4" />
                 新增字幕
               </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={downloadSubtitles}
-                className="flex items-center gap-2"
-              >
-                <Download className="h-4 w-4" />
-                下載字幕
-              </Button>
+              <div className="relative subtitle-format-dropdown">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowSubtitleFormats(!showSubtitleFormats)}
+                  className="flex items-center gap-2"
+                >
+                  下載字幕
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+                {showSubtitleFormats && (
+                  <div className="absolute top-full mt-1 left-0 bg-background border rounded-md shadow-lg z-10 py-1 min-w-[150px]">
+                    <button
+                      onClick={() => handleDownload('vtt')}
+                      className="w-full px-3 py-2 text-sm hover:bg-accent text-left"
+                    >
+                      WebVTT (.vtt)
+                    </button>
+                    <button
+                      onClick={() => handleDownload('srt')}
+                      className="w-full px-3 py-2 text-sm hover:bg-accent text-left"
+                    >
+                      SubRip (.srt)
+                    </button>
+                    <button
+                      onClick={() => handleDownload('txt')}
+                      className="w-full px-3 py-2 text-sm hover:bg-accent text-left"
+                    >
+                      純文字 (.txt)
+                    </button>
+                    <button
+                      onClick={() => handleDownload('ass')}
+                      className="w-full px-3 py-2 text-sm hover:bg-accent text-left"
+                    >
+                      ASS/SSA (.ass)
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </CardHeader>
