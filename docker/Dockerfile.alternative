@@ -1,0 +1,63 @@
+# Build stage
+FROM oven/bun:1-alpine AS builder
+
+# Install dependencies for building
+RUN apk add --no-cache libc6-compat python3 make g++
+
+WORKDIR /app
+
+# Copy package files
+COPY package.json bun.lockb ./
+
+# Install dependencies
+RUN bun install --frozen-lockfile
+
+# Copy source code
+COPY . .
+
+# Build the application
+ENV NEXT_TELEMETRY_DISABLED=1
+
+RUN bun run build
+
+# Production stage
+FROM oven/bun:1-alpine AS runner
+
+WORKDIR /app
+
+# Install ffmpeg and production dependencies
+RUN apk add --no-cache \
+    ffmpeg \
+    libc6-compat
+
+# Create a non-root user
+RUN addgroup -g 1001 -S nodejs
+RUN adduser -S nextjs -u 1001
+
+# Copy package files
+COPY --from=builder /app/package.json ./
+COPY --from=builder /app/bun.lockb ./
+
+# Install production dependencies only
+RUN bun install --frozen-lockfile --production
+
+# Copy built application
+COPY --from=builder --chown=nextjs:nodejs /app/.next ./.next
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/next.config.ts ./
+COPY --from=builder /app/next-env.d.ts ./
+
+# Set environment variables
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
+
+# Switch to non-root user
+USER nextjs
+
+# Expose port
+EXPOSE 3000
+
+# Start the application
+CMD ["bun", "start"] 
