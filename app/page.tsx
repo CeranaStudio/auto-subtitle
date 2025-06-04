@@ -368,7 +368,7 @@ export default function Home() {
       textAlign: textAlign as 'left' | 'center' | 'right',
       fontSize: `${scaledFontSize}vw`, // Use vw units for responsive scaling
       color: 'white',
-      fontFamily: '"Noto Sans", sans-serif',
+      fontFamily: 'Helvetica, Arial, sans-serif',
       fontWeight: 500,
       textShadow: subtitleOutline > 0 
         ? `0 0 ${subtitleOutline * scaleFactor * 2}vw black, 0 0 ${subtitleOutline * scaleFactor}vw black` 

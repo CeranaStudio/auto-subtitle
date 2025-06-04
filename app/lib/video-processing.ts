@@ -24,7 +24,27 @@ const DEFAULT_SUBTITLE_OPTIONS: SubtitleOptions = {
   fontSize: 24
 };
 
-const escapePath = (p: string) => p.replace(/:/g, '\\:');
+/**
+ * Build a simple subtitle filter using system default fonts
+ * Avoids complex font file handling that can cause permission issues
+ */
+const buildSimpleSubtitleFilter = (
+  subtitlesPath: string,
+  options: {
+    fontSize: number;
+    position: number;
+    outline: number;
+  }
+): string => {
+  // Escape the subtitle path for ffmpeg
+  const escapedPath = path.resolve(subtitlesPath).replace(/\\/g, '/').replace(/:/g, '\\:');
+  
+  // Use a simple, reliable font configuration that works across systems
+  // FFmpeg will fall back to available system fonts automatically
+  const subtitleFilter = `subtitles=${escapedPath}:force_style='FontName=Helvetica,FontSize=${options.fontSize},Alignment=${options.position},OutlineColour=&H80000000,BorderStyle=3${options.outline > 0 ? `,Outline=${options.outline}` : ''},Shadow=0,MarginV=20'`;
+  
+  return subtitleFilter;
+};
 
 /**
  * Generate video with subtitles using ffmpeg
@@ -46,30 +66,24 @@ export const generateVideoWithSubtitles = async (
 ): Promise<void> => {
   return new Promise((resolve, reject) => {
     const { width, height } = DIMENSIONS[dimension];
-    const escapedSub = escapePath(path.resolve(subtitlesPath));
     
     // Combine default options with provided options
     const options = { ...DEFAULT_SUBTITLE_OPTIONS, ...subtitleOptions };
     
-    // Build subtitle style string
-    const subtitleStyle = [
-      `FontName=Noto Sans`,
-      `FontSize=${options.fontSize}`,
-      `Alignment=${options.position}`, // 1=left, 2=center, 3=right
-      `OutlineColour=&H80000000`, // More transparent black outline (80 instead of 40)
-      `BorderStyle=3`, // Outline and shadow
-      options.outline > 0 ? `Outline=${options.outline}` : '', // Outline width
-      `Shadow=0`, // No shadow to avoid doubling
-      `MarginV=20` // Vertical margin from bottom
-    ].filter(Boolean).join(',');
+    // Build subtitle filter using simple approach
+    const subtitleFilter = buildSimpleSubtitleFilter(subtitlesPath, {
+      fontSize: options.fontSize,
+      position: options.position,
+      outline: options.outline
+    });
     
     let filters: string;
 
     if (imagePath) {
       // 'fit' mode - scale to fit inside canvas with black padding
-      filters = `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=black,subtitles=${escapedSub}:force_style='${subtitleStyle}'`;
+      filters = `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=black,${subtitleFilter}`;
     } else {
-      filters = `subtitles=${escapedSub}:force_style='${subtitleStyle}'`;
+      filters = subtitleFilter;
     }
 
     const ffmpegArgs = imagePath

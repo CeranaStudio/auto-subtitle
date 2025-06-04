@@ -191,7 +191,7 @@ export async function POST(request: NextRequest) {
         await new Promise<void>((resolve, reject) => {
           // Build ffmpeg args for adding subtitles to video
           const subtitleStyle = [
-            'FontName=Noto Sans',
+            'FontName=Helvetica',
             `FontSize=${subtitleSize}`,
             `Alignment=${subtitlePosition}`, 
             'OutlineColour=&H80000000',
@@ -293,9 +293,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-}; 
