@@ -2,10 +2,16 @@ import { OpenAI } from 'openai';
 import fs from 'fs';
 import { TranscriptionError } from '../utils/error-handling';
 
-// Initialize OpenAI client
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+// Lazy initialization of OpenAI client
+const getOpenAIClient = () => {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new TranscriptionError('OpenAI API key is not configured');
+  }
+  
+  return new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+  });
+};
 
 // Define interface for transcription segments
 interface TranscriptionSegment {
@@ -30,6 +36,9 @@ interface TextChunk {
  */
 export const transcribeAudio = async (audioPath: string): Promise<string> => {
   try {
+    // Initialize OpenAI client when actually needed
+    const openai = getOpenAIClient();
+    
     // First get a JSON transcription with timestamps for better control
     const transcription = await openai.audio.transcriptions.create({
       file: fs.createReadStream(audioPath),
