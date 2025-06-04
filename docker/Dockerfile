@@ -7,7 +7,7 @@ RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
 # Copy package files
-COPY package.json bun.lockb ./
+COPY bun.lock ./
 
 # Install dependencies
 RUN bun install --frozen-lockfile
@@ -37,6 +37,8 @@ RUN adduser -S nextjs -u 1001
 
 # Copy built application from builder stage
 COPY --from=builder /app/public ./public
+
+# Ensure we have the correct permissions and structure
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
@@ -52,5 +54,5 @@ USER nextjs
 # Expose port
 EXPOSE 3000
 
-# Start the application
-CMD ["bun", "server.js"] 
+# Start the application - server.js is in the root of standalone build
+CMD ["node", "server.js"] 
