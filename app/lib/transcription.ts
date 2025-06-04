@@ -1,5 +1,6 @@
-import { OpenAI } from 'openai';
+import { OpenAI, toFile } from 'openai';
 import fs from 'fs';
+import path from 'path';
 import { TranscriptionError } from '../utils/error-handling';
 
 // Lazy initialization of OpenAI client
@@ -39,9 +40,18 @@ export const transcribeAudio = async (audioPath: string): Promise<string> => {
     // Initialize OpenAI client when actually needed
     const openai = getOpenAIClient();
     
+    // Read the file into a buffer first to ensure it exists and is accessible
+    const audioBuffer = await fs.promises.readFile(audioPath);
+    
+    // Get the filename from the path for metadata
+    const filename = path.basename(audioPath);
+    
+    // Create a File object from the buffer with proper metadata
+    const audioFile = await toFile(audioBuffer, filename);
+    
     // First get a JSON transcription with timestamps for better control
     const transcription = await openai.audio.transcriptions.create({
-      file: fs.createReadStream(audioPath),
+      file: audioFile,
       model: 'whisper-1',
       response_format: 'verbose_json',
       // Instruct Whisper to use "am"/"pm" instead of "a.m."/"p.m." to avoid mid‑sentence dots being treated as sentence breaks

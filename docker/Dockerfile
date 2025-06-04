@@ -42,6 +42,11 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
+# Create uploads and outputs directories with correct permissions
+RUN mkdir -p ./public/uploads ./public/outputs && \
+    chown -R nextjs:nodejs ./public/uploads ./public/outputs && \
+    chmod -R 755 ./public/uploads ./public/outputs
+
 # Set environment variables
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
