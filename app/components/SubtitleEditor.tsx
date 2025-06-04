@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useImperativeHandle, forwardRef } from "react";
+import { useState, useEffect, useImperativeHandle, forwardRef, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,7 +14,8 @@ import {
   Type,
   CheckCircle,
   X,
-  ChevronDown
+  ChevronDown,
+  PlayCircle
 } from "lucide-react";
 import { toast } from "sonner";
 import { downloadSubtitles as downloadSubtitleWithFormat } from "../lib/subtitle-converter";
@@ -28,6 +29,7 @@ interface SubtitleEntry {
 
 interface SubtitleEditorProps {
   subtitlesUrl: string;
+  currentTime?: number;
 }
 
 export interface SubtitleEditorRef {
@@ -35,7 +37,8 @@ export interface SubtitleEditorRef {
 }
 
 export const SubtitleEditor = forwardRef<SubtitleEditorRef, SubtitleEditorProps>(({ 
-  subtitlesUrl
+  subtitlesUrl,
+  currentTime = 0
 }, ref) => {
   const [subtitles, setSubtitles] = useState<SubtitleEntry[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -47,6 +50,9 @@ export const SubtitleEditor = forwardRef<SubtitleEditorRef, SubtitleEditorProps>
     text: ""
   });
   const [showSubtitleFormats, setShowSubtitleFormats] = useState(false);
+  const [activeSubtitleId, setActiveSubtitleId] = useState<string | null>(null);
+  const [userScrolling, setUserScrolling] = useState(false);
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Add effect to handle clicking outside dropdown
   useEffect(() => {
@@ -93,6 +99,51 @@ export const SubtitleEditor = forwardRef<SubtitleEditorRef, SubtitleEditorProps>
 
     fetchSubtitles();
   }, [subtitlesUrl]);
+
+  // Effect to highlight active subtitle based on current time
+  useEffect(() => {
+    if (currentTime > 0 && subtitles.length > 0) {
+      const activeSubtitle = subtitles.find(sub => {
+        const startSeconds = timeToSeconds(sub.startTime);
+        const endSeconds = timeToSeconds(sub.endTime);
+        return currentTime >= startSeconds && currentTime <= endSeconds;
+      });
+      
+      setActiveSubtitleId(activeSubtitle?.id ?? null);
+      
+      // Auto-scroll to active subtitle only if user is not scrolling
+      if (activeSubtitle?.id && !userScrolling) {
+        const element = document.getElementById(`subtitle-${activeSubtitle.id}`);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }
+    }
+  }, [currentTime, subtitles, userScrolling]);
+
+  // Handle user scroll
+  const handleScroll = () => {
+    setUserScrolling(true);
+    
+    // Clear existing timeout
+    if (scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+    }
+    
+    // Set timeout to reset scrolling flag
+    scrollTimeoutRef.current = setTimeout(() => {
+      setUserScrolling(false);
+    }, 3000); // Resume auto-scroll after 3 seconds of no user scrolling
+  };
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Parse VTT format into structured data
   const parseVTT = (vttContent: string): SubtitleEntry[] => {
@@ -324,6 +375,11 @@ export const SubtitleEditor = forwardRef<SubtitleEditorRef, SubtitleEditorProps>
             <CardTitle className="text-md flex items-center gap-2">
               <Edit3 className="h-4 w-4" />
               字幕編輯器
+              {currentTime > 0 && (
+                <span className="text-xs font-normal text-muted-foreground">
+                  (播放時間: {secondsToTime(currentTime).substring(3, 8)})
+                </span>
+              )}
             </CardTitle>
             <div className="flex gap-2">
               <Button 
@@ -380,7 +436,10 @@ export const SubtitleEditor = forwardRef<SubtitleEditorRef, SubtitleEditorProps>
         
         <CardContent className="p-0">
           {/* Subtitles List */}
-          <div className="max-h-96 overflow-auto p-4">
+          <div 
+            className="max-h-96 overflow-auto p-4 scroll-smooth"
+            onScroll={handleScroll}
+          >
             <div className="space-y-3">
               {subtitles.map((subtitle, index) => (
                 <div key={subtitle.id} className="group">
@@ -431,21 +490,48 @@ export const SubtitleEditor = forwardRef<SubtitleEditorRef, SubtitleEditorProps>
                     </div>
                   ) : (
                     // View Mode
-                    <div className="flex items-start gap-3 p-3 rounded-lg hover:bg-muted/30 transition-colors">
+                    <div 
+                      id={`subtitle-${subtitle.id}`}
+                      className={`flex items-start gap-3 p-3 rounded-lg transition-all duration-200 ${
+                        activeSubtitleId === subtitle.id 
+                          ? 'bg-primary/20 border-l-4 border-primary' 
+                          : 'hover:bg-muted/30'
+                      }`}
+                    >
                       <div className="flex flex-col items-center gap-1 min-w-0">
-                        <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80">
-                          #{index + 1}
+                        <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${
+                          activeSubtitleId === subtitle.id
+                            ? 'border-primary bg-primary text-primary-foreground'
+                            : 'border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80'
+                        }`}>
+                          {activeSubtitleId === subtitle.id ? (
+                            <PlayCircle className="h-3 w-3" />
+                          ) : (
+                            `#${index + 1}`
+                          )}
                         </span>
                       </div>
                       
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
-                          <Clock className="h-3 w-3 text-muted-foreground" />
-                          <span className="text-xs text-muted-foreground font-mono">
+                          <Clock className={`h-3 w-3 ${
+                            activeSubtitleId === subtitle.id
+                              ? 'text-primary'
+                              : 'text-muted-foreground'
+                          }`} />
+                          <span className={`text-xs font-mono ${
+                            activeSubtitleId === subtitle.id
+                              ? 'text-primary font-semibold'
+                              : 'text-muted-foreground'
+                          }`}>
                             {formatDisplayTime(subtitle.startTime)} → {formatDisplayTime(subtitle.endTime)}
                           </span>
                         </div>
-                        <p className="text-sm leading-relaxed break-words">{subtitle.text}</p>
+                        <p className={`text-sm leading-relaxed break-words ${
+                          activeSubtitleId === subtitle.id
+                            ? 'font-medium'
+                            : ''
+                        }`}>{subtitle.text}</p>
                       </div>
                       
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">

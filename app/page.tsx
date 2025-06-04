@@ -49,6 +49,8 @@ export default function Home() {
   const [subtitleText, setSubtitleText] = useState<string>("預覽字幕效果");
   const [inputMode, setInputMode] = useState<string>("audio");
   const [showSubtitleFormats, setShowSubtitleFormats] = useState(false);
+  const [currentVideoTime, setCurrentVideoTime] = useState(0);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   const subtitleEditorRef = useRef<SubtitleEditorRef>(null);
 
@@ -390,6 +392,13 @@ export default function Home() {
     }
   };
 
+  // Listen to video playback
+  const handleVideoTimeUpdate = () => {
+    if (videoRef.current) {
+      setCurrentVideoTime(videoRef.current.currentTime);
+    }
+  };
+
   return (
     <main className="flex min-h-screen flex-col p-4 md:p-8">
       <EnvironmentCheck />
@@ -690,7 +699,7 @@ export default function Home() {
                     <video 
                       src={videoPreviewUrl} 
                       controls 
-                      className="w-full" 
+                      className="w-full"
                     />
                     <div className="text-xs text-muted-foreground mt-1">
                       原始影片（字幕將在處理過程中疊加）
@@ -767,7 +776,13 @@ export default function Home() {
                 {videoUrl && (
                   <>
                     <div className="overflow-hidden rounded-lg">
-                      <video src={videoUrl} controls className="w-full" />
+                      <video 
+                        ref={videoRef}
+                        src={videoUrl} 
+                        controls 
+                        className="w-full"
+                        onTimeUpdate={handleVideoTimeUpdate}
+                      />
                     </div>
                     <div className="flex gap-2">
                       <Button asChild variant="default" className="flex-1">
@@ -830,6 +845,7 @@ export default function Home() {
                   <SubtitleEditor 
                     ref={subtitleEditorRef}
                     subtitlesUrl={subtitlesUrl}
+                    currentTime={currentVideoTime}
                   />
                   
                   <Button
